@@ -1,43 +1,63 @@
-const ERPNEXT_URL = process.env.ERPNEXT_URL || 'https://amidc.frappe.cloud';
+// ERPNext API helper — server-side only
+const ERPNEXT_URL = (process.env.ERPNEXT_URL || 'https://amidc.frappe.cloud').replace(/\/$/,'');
 const ERPNEXT_TOKEN = process.env.ERPNEXT_TOKEN || '';
-const EXCLUDED_CUSTOMERS = ['Ati Motors Inc.', 'ATI MOTORS ROBOTS S DE RL DE CV'];
+const EXCLUDED = ['Ati Motors Inc.', 'ATI MOTORS ROBOTS S DE RL DE CV'];
 
-async function erpFetch(endpoint) {
-  const url = ERPNEXT_URL + endpoint;
-  const res = await fetch(url, {
-    headers: { 'Authorization': 'token ' + ERPNEXT_TOKEN, 'Content-Type': 'application/json' },
-    next: { revalidate: 0 }
-  });
-  if (!res.ok) throw new Error('ERPNext API error: ' + res.status);
-  return res.json();
+export interface SalesInvoice {
+  name: string; customer: string; posting_date: string; due_date: string;
+  grand_total: number; outstanding_amount: number; status: string;
+}
+export interface PaymentEntry {
+  name: string; party: string; posting_date: string;
+  paid_amount: number; unallocated_amount: number; payment_type: string;
+}
+export interface DashboardData {
+  invoices: SalesInvoice[]; payments: PaymentEntry[]; fetchedAt: string;
 }
 
-async function fetchAllPaginated(doctype, fields, filters = [], limit = 200) {
-  const results = [];
+async function erpGet(path: string): Promise<{data: unknown[]}> {
+  const res = await fetch(ERPNEXT_URL + path, {
+    headers: { Authorization: 'token ' + ERPNEXT_TOKEN, Accept: 'application/json' },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const b = await res.text().catch(() => '');
+    throw new Error('ERPNext ' + res.status + ' ' + res.statusText + ' — ' + b.slice(0,300));
+  }
+  return res.json() as Promise<{data: unknown[]}>;
+}
+
+async function fetchAll<T>(
+  doctype: string, fields: string[],
+  filters: Array<[string, string, unknown]> = [], page = 200
+): Promise<T[]> {
+  const all: T[] = [];
   let start = 0;
   while (true) {
-    const params = new URLSearchParams();
-    params.append('doctype', doctype);
-    params.append('fields', JSON.stringify(fields));
-    if (filters.length > 0) params.append('filters', JSON.stringify(filters));
-    params.append('limit_start', start);
-    params.append('limit_page_length', limit);
-    params.append('order_by', 'name asc');
-    const data = await erpFetch('/api/resource/' + doctype + '?' + params);
-    const records = data.data || [];
-    results.push(...records);
-    if (records.length < limit) break;
-    start += limit;
+    const qs = 'fields=' + encodeURIComponent(JSON.stringify(fields))
+      + (filters.length ? '&filters=' + encodeURIComponent(JSON.stringify(filters)) : '')
+      + '&limit_start=' + start + '&limit_page_length=' + page + '&order_by=name+asc';
+    const { data } = await erpGet('/api/resource/' + encodeURIComponent(doctype) + '?' + qs);
+    const rows = (data || []) as T[];
+    all.push(...rows);
+    if (rows.length < page) break;
+    start += page;
   }
-  return results;
+  return all;
 }
 
-export async function fetchDashboardData() {
-  const invoices = await fetchAllPaginated('Sales Invoice', ['name','customer','posting_date','due_date','grand_total','outstanding_amount','status'], [['docstatus','=',1]]);
-  const payments = await fetchAllPaginated('Payment Entry', ['name','party','posting_date','paid_amount','unallocated_amount','payment_type'], [['docstatus','=',1],['payment_type','=','Receive']]);
+export async function fetchDashboardData(): Promise<DashboardData> {
+  const [inv, pay] = await Promise.all([
+    fetchAll<SalesInvoice>('Sales Invoice',
+      ['name','customer','posting_date','due_date','grand_total','outstanding_amount','status'],
+      [['docstatus','=',1]]),
+    fetchAll<PaymentEntry>('Payment Entry',
+      ['name','party','posting_date','paid_amount','unallocated_amount','payment_type'],
+      [['docstatus','=',1],['payment_type','=','Receive']]),
+  ]);
   return {
-    invoices: invoices.filter(i => !EXCLUDED_CUSTOMERS.includes(i.customer)),
-    payments: payments.filter(p => !EXCLUDED_CUSTOMERS.includes(p.party)),
-    fetchedAt: new Date().toISOString()
+    invoices: inv.filter(i => !EXCLUDED.includes(i.customer)),
+    payments: pay.filter(p => !EXCLUDED.includes(p.party)),
+    fetchedAt: new Date().toISOString(),
   };
 }
