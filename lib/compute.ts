@@ -314,4 +314,3 @@ return {
   fetchedAt,
 };
 }
-}
