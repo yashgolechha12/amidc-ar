@@ -37,6 +37,10 @@ export default function TabDrilldown({ stats, initialCustomer }: Props) {
     setSelectedPO('');
   }, [selectedCustomer]);
 
+  useEffect(() => {
+    setSelectedPO('');
+  }, [selectedLocation]);
+
   const customer = useMemo(
     () => stats.customers.find(c => c.customer === selectedCustomer),
     [stats, selectedCustomer]
@@ -172,21 +176,52 @@ export default function TabDrilldown({ stats, initialCustomer }: Props) {
             />
           </div>
 
-          {/* Customer Location selector */}
-          <div className="flex items-center gap-3">
-            <select
-              value={selectedLocation}
-              onChange={e => setSelectedLocation(e.target.value)}
-              className="px-4 py-2 rounded-lg text-sm text-white outline-none max-w-lg w-full"
-              style={{ backgroundColor: '#161d2b', border: '1px solid #1e293b' }}
-            >
-              <option value="">— Select a customer location —</option>
-              {customer.locations.map(l => (
-                <option key={l.location} value={l.location}>
-                  {l.location} ({fmtCurrency(l.outstanding, true)} outstanding)
-                </option>
-              ))}
-            </select>
+          {/* Location-wise Outstanding table */}
+          <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#161d2b', border: '1px solid #1e293b' }}>
+            <div className="px-5 py-3 border-b" style={{ borderColor: '#1e293b' }}>
+              <h3 className="font-semibold text-white">Location-wise Outstanding</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                    <th className="text-left px-4 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Location</th>
+                    <th className="text-right px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Outstanding</th>
+                    <th className="text-right px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Total Invoiced</th>
+                    <th className="text-right px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Open Invoices</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {customer.locations.map(l => {
+                    const isSelected = l.location === selectedLocation;
+                    return (
+                      <tr
+                        key={l.location}
+                        onClick={() => setSelectedLocation(isSelected ? '' : l.location)}
+                        className="cursor-pointer hover:bg-slate-800 transition-colors"
+                        style={{
+                          borderBottom: '1px solid #0b0f14',
+                          backgroundColor: isSelected ? '#00b49a1a' : 'transparent',
+                        }}
+                      >
+                        <td className="px-4 py-3 text-xs font-medium" style={{ color: isSelected ? '#00b49a' : '#e2e8f0' }}>
+                          {l.location}
+                        </td>
+                        <td className="px-3 py-3 text-right text-xs font-mono" style={{ color: '#f87171' }}>
+                          {fmtCurrency(l.outstanding, true)}
+                        </td>
+                        <td className="px-3 py-3 text-right text-xs font-mono" style={{ color: '#fbbf24' }}>
+                          {fmtCurrency(l.totalInvoiced, true)}
+                        </td>
+                        <td className="px-3 py-3 text-right text-xs font-mono" style={{ color: '#60a5fa' }}>
+                          {l.openInvoices}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {!location && (
@@ -197,21 +232,52 @@ export default function TabDrilldown({ stats, initialCustomer }: Props) {
 
           {location && (
             <>
-              {/* Customer PO Number selector */}
-              <div className="flex items-center gap-3">
-                <select
-                  value={selectedPO}
-                  onChange={e => setSelectedPO(e.target.value)}
-                  className="px-4 py-2 rounded-lg text-sm text-white outline-none max-w-lg w-full"
-                  style={{ backgroundColor: '#161d2b', border: '1px solid #1e293b' }}
-                >
-                  <option value="">— Select a customer PO number —</option>
-                  {location.poGroups.map(p => (
-                    <option key={p.poNo} value={p.poNo}>
-                      {p.poNo} ({fmtCurrency(p.outstanding, true)} outstanding)
-                    </option>
-                  ))}
-                </select>
+              {/* PO-wise Outstanding table */}
+              <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#161d2b', border: '1px solid #1e293b' }}>
+                <div className="px-5 py-3 border-b" style={{ borderColor: '#1e293b' }}>
+                  <h3 className="font-semibold text-white">PO-wise Outstanding — {location.location}</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                        <th className="text-left px-4 py-3 text-xs font-medium" style={{ color: '#64748b' }}>PO Number</th>
+                        <th className="text-right px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Outstanding</th>
+                        <th className="text-right px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Total Invoiced</th>
+                        <th className="text-right px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Open Invoices</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {location.poGroups.map(p => {
+                        const isSelected = p.poNo === selectedPO;
+                        return (
+                          <tr
+                            key={p.poNo}
+                            onClick={() => setSelectedPO(isSelected ? '' : p.poNo)}
+                            className="cursor-pointer hover:bg-slate-800 transition-colors"
+                            style={{
+                              borderBottom: '1px solid #0b0f14',
+                              backgroundColor: isSelected ? '#00b49a1a' : 'transparent',
+                            }}
+                          >
+                            <td className="px-4 py-3 text-xs font-mono" style={{ color: isSelected ? '#00b49a' : '#e2e8f0' }}>
+                              {p.poNo}
+                            </td>
+                            <td className="px-3 py-3 text-right text-xs font-mono" style={{ color: '#f87171' }}>
+                              {fmtCurrency(p.outstanding, true)}
+                            </td>
+                            <td className="px-3 py-3 text-right text-xs font-mono" style={{ color: '#fbbf24' }}>
+                              {fmtCurrency(p.totalInvoiced, true)}
+                            </td>
+                            <td className="px-3 py-3 text-right text-xs font-mono" style={{ color: '#60a5fa' }}>
+                              {p.openInvoices}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               {!poGroup && (
