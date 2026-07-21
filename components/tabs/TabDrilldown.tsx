@@ -25,14 +25,31 @@ function getDaysPending(postingDate: string): number {
 
 export default function TabDrilldown({ stats, initialCustomer }: Props) {
   const [selectedCustomer, setSelectedCustomer] = useState(initialCustomer || '');
+  const [selectedLocation, setSelectedLocation] = useState('');
+  const [selectedPO, setSelectedPO] = useState('');
 
   useEffect(() => {
     if (initialCustomer) setSelectedCustomer(initialCustomer);
   }, [initialCustomer]);
 
+  useEffect(() => {
+    setSelectedLocation('');
+    setSelectedPO('');
+  }, [selectedCustomer]);
+
   const customer = useMemo(
     () => stats.customers.find(c => c.customer === selectedCustomer),
     [stats, selectedCustomer]
+  );
+
+  const location = useMemo(
+    () => customer?.locations.find(l => l.location === selectedLocation),
+    [customer, selectedLocation]
+  );
+
+  const poGroup = useMemo(
+    () => location?.poGroups.find(p => p.poNo === selectedPO),
+    [location, selectedPO]
   );
 
   const agingTotal = customer
@@ -155,58 +172,109 @@ export default function TabDrilldown({ stats, initialCustomer }: Props) {
             />
           </div>
 
-          {/* Invoice table */}
-          <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#161d2b', border: '1px solid #1e293b' }}>
-            <div className="px-5 py-3 border-b" style={{ borderColor: '#1e293b' }}>
-              <h3 className="font-semibold text-white">Invoice Details</h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr style={{ borderBottom: '1px solid #1e293b' }}>
-                    <th className="text-left px-4 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Invoice #</th>
-                    <th className="text-left px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Date</th>
-                    <th className="text-left px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Due Date</th>
-                    <th className="text-right px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Amount</th>
-                    <th className="text-right px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Received</th>
-                    <th className="text-right px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Outstanding</th>
-                    <th className="text-right px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Days Pending</th>
-                    <th className="text-right px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Overdue</th>
-                    <th className="text-center px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {customer.invoices.map(inv => {
-                    const daysOverdue = getDaysOverdue(inv.due_date);
-                    const daysPending = getDaysPending(inv.posting_date);
-                    const received = (inv.grand_total || 0) - (inv.outstanding_amount || 0);
-                    return (
-                      <tr key={inv.name} className="hover:bg-slate-800 transition-colors"
-                        style={{ borderBottom: '1px solid #0b0f14' }}>
-                        <td className="px-4 py-3 text-xs font-mono" style={{ color: '#00b49a' }}>{inv.name}</td>
-                        <td className="px-3 py-3 text-xs" style={{ color: '#94a3b8' }}>{inv.posting_date}</td>
-                        <td className="px-3 py-3 text-xs" style={{ color: '#94a3b8' }}>{inv.due_date}</td>
-                        <td className="px-3 py-3 text-right text-xs font-mono" style={{ color: '#e2e8f0' }}>
-                          {fmtCurrency(inv.grand_total)}
-                        </td>
-                        <td className="px-3 py-3 text-right text-xs font-mono" style={{ color: '#34d399' }}>
-                          {received > 0 ? fmtCurrency(received) : '-'}
-                        </td>
-                        <td className="px-3 py-3 text-right text-xs font-mono" style={{ color: '#f87171' }}>
-                          {inv.outstanding_amount > 0 ? fmtCurrency(inv.outstanding_amount) : '-'}
-                        </td>
-                        <td className="px-3 py-3 text-right text-xs font-mono" style={{ color: '#64748b' }}>
-                          {daysPending}d
-                        </td>
-                        <td className="px-3 py-3 text-right">{getDaysBadge(daysOverdue)}</td>
-                        <td className="px-3 py-3 text-center">{getStatusBadge(inv.status)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+          {/* Customer Location selector */}
+          <div className="flex items-center gap-3">
+            <select
+              value={selectedLocation}
+              onChange={e => setSelectedLocation(e.target.value)}
+              className="px-4 py-2 rounded-lg text-sm text-white outline-none max-w-lg w-full"
+              style={{ backgroundColor: '#161d2b', border: '1px solid #1e293b' }}
+            >
+              <option value="">— Select a customer location —</option>
+              {customer.locations.map(l => (
+                <option key={l.location} value={l.location}>
+                  {l.location} ({fmtCurrency(l.outstanding, true)} outstanding)
+                </option>
+              ))}
+            </select>
           </div>
+
+          {!location && (
+            <div className="py-10 text-center" style={{ color: '#64748b' }}>
+              Select a customer location to drill down further
+            </div>
+          )}
+
+          {location && (
+            <>
+              {/* Customer PO Number selector */}
+              <div className="flex items-center gap-3">
+                <select
+                  value={selectedPO}
+                  onChange={e => setSelectedPO(e.target.value)}
+                  className="px-4 py-2 rounded-lg text-sm text-white outline-none max-w-lg w-full"
+                  style={{ backgroundColor: '#161d2b', border: '1px solid #1e293b' }}
+                >
+                  <option value="">— Select a customer PO number —</option>
+                  {location.poGroups.map(p => (
+                    <option key={p.poNo} value={p.poNo}>
+                      {p.poNo} ({fmtCurrency(p.outstanding, true)} outstanding)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {!poGroup && (
+                <div className="py-10 text-center" style={{ color: '#64748b' }}>
+                  Select a customer PO number to view invoices
+                </div>
+              )}
+
+              {poGroup && (
+                <div className="rounded-xl overflow-hidden" style={{ backgroundColor: '#161d2b', border: '1px solid #1e293b' }}>
+                  <div className="px-5 py-3 border-b" style={{ borderColor: '#1e293b' }}>
+                    <h3 className="font-semibold text-white">Invoice Details</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                          <th className="text-left px-4 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Invoice #</th>
+                          <th className="text-left px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Date</th>
+                          <th className="text-left px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Due Date</th>
+                          <th className="text-right px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Amount</th>
+                          <th className="text-right px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Received</th>
+                          <th className="text-right px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Outstanding</th>
+                          <th className="text-right px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Days Pending</th>
+                          <th className="text-right px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Overdue</th>
+                          <th className="text-center px-3 py-3 text-xs font-medium" style={{ color: '#64748b' }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {poGroup.invoices.map(inv => {
+                          const daysOverdue = getDaysOverdue(inv.due_date);
+                          const daysPending = getDaysPending(inv.posting_date);
+                          const received = (inv.grand_total || 0) - (inv.outstanding_amount || 0);
+                          return (
+                            <tr key={inv.name} className="hover:bg-slate-800 transition-colors"
+                              style={{ borderBottom: '1px solid #0b0f14' }}>
+                              <td className="px-4 py-3 text-xs font-mono" style={{ color: '#00b49a' }}>{inv.name}</td>
+                              <td className="px-3 py-3 text-xs" style={{ color: '#94a3b8' }}>{inv.posting_date}</td>
+                              <td className="px-3 py-3 text-xs" style={{ color: '#94a3b8' }}>{inv.due_date}</td>
+                              <td className="px-3 py-3 text-right text-xs font-mono" style={{ color: '#e2e8f0' }}>
+                                {fmtCurrency(inv.grand_total)}
+                              </td>
+                              <td className="px-3 py-3 text-right text-xs font-mono" style={{ color: '#34d399' }}>
+                                {received > 0 ? fmtCurrency(received) : '-'}
+                              </td>
+                              <td className="px-3 py-3 text-right text-xs font-mono" style={{ color: '#f87171' }}>
+                                {inv.outstanding_amount > 0 ? fmtCurrency(inv.outstanding_amount) : '-'}
+                              </td>
+                              <td className="px-3 py-3 text-right text-xs font-mono" style={{ color: '#64748b' }}>
+                                {daysPending}d
+                              </td>
+                              <td className="px-3 py-3 text-right">{getDaysBadge(daysOverdue)}</td>
+                              <td className="px-3 py-3 text-center">{getStatusBadge(inv.status)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </>
       )}
     </div>
